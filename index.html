@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ITCH 5.0 Parser — Tristan Lee</title>
+<meta name="description" content="FPGA-based NASDAQ ITCH 5.0 market data decoder and Limit Order Book in pure Verilog. Sub-840ns latency on Xilinx Alveo U55C."/>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+*{margin:0;padding:0;box-sizing:border-box;}
+
+:root{
+  --bg:#08090e;
+  --surface:#0e1018;
+  --border:#1c1f2e;
+  --accent:#00e676;
+  --accent2:#448aff;
+  --accent3:#ff6d00;
+  --text:#e8eaf0;
+  --muted:#5c6080;
+  --mono:'JetBrains Mono',monospace;
+  --sans:'Inter',sans-serif;
+}
+
+html{scroll-behavior:smooth;}
+
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--sans);
+  line-height:1.6;
+}
+
+/* Nav */
+nav{
+  position:fixed;
+  top:0;left:0;right:0;
+  z-index:100;
+  background:rgba(8,9,14,0.92);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  padding:0 40px;
+  height:56px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+
+.nav-logo{
+  font-family:var(--mono);
+  font-size:13px;
+  color:var(--accent);
+  text-decoration:none;
+}
+
+.nav-links{
+  display:flex;
+  gap:32px;
+  list-style:none;
+}
+
+.nav-links a{
+  font-size:13px;
+  color:var(--muted);
+  text-decoration:none;
+  transition:color 0.2s;
+}
+
+.nav-links a:hover{color:var(--text);}
+
+/* Sections */
+section{
+  max-width:1100px;
+  margin:0 auto;
+  padding:100px 40px;
+}
+
+/* Hero */
+.hero{
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  padding-top:120px;
+  position:relative;
+  overflow:hidden;
+}
+
+.hero::before{
+  content:'';
+  position:fixed;
+  inset:0;
+  background-image:
+    linear-gradient(rgba(0,230,118,0.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,230,118,0.03) 1px,transparent 1px);
+  background-size:60px 60px;
+  pointer-events:none;
+  z-index:0;
+}
+
+.hero > *{position:relative;z-index:1;}
+
+.hero-eyebrow{
+  font-family:var(--mono);
+  font-size:12px;
+  color:var(--accent);
+  letter-spacing:3px;
+  text-transform:uppercase;
+  margin-bottom:24px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
+.hero-eyebrow::before{
+  content:'';
+  width:32px;
+  height:1px;
+  background:var(--accent);
+}
+
+h1{
+  font-size:clamp(40px,6vw,80px);
+  font-weight:700;
+  line-height:1.05;
+  margin-bottom:24px;
+  letter-spacing:-2px;
+}
+
+h1 .green{color:var(--accent);}
+h1 .muted{color:var(--muted);}
+
+.hero-sub{
+  font-size:18px;
+  color:var(--muted);
+  max-width:600px;
+  margin-bottom:48px;
+  font-weight:400;
+  line-height:1.7;
+}
+
+.hero-sub strong{color:var(--text);font-weight:500;}
+
+.hero-cta{
+  display:flex;
+  gap:16px;
+  flex-wrap:wrap;
+}
+
+.btn{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:12px 24px;
+  border-radius:6px;
+  font-size:14px;
+  font-weight:500;
+  text-decoration:none;
+  transition:all 0.2s;
+  cursor:pointer;
+  border:none;
+}
+
+.btn-primary{
+  background:var(--accent);
+  color:#000;
+}
+
+.btn-primary:hover{background:#00ff88;}
+
+.btn-ghost{
+  background:transparent;
+  color:var(--text);
+  border:1px solid var(--border);
+}
+
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
+
+/* Stats bar */
+.stats-bar{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:1px;
+  background:var(--border);
+  border:1px solid var(--border);
+  border-radius:8px;
+  overflow:hidden;
+  margin-top:64px;
+}
+
+.stat{
+  background:var(--surface);
+  padding:28px 24px;
+  text-align:center;
+}
+
+.stat-val{
+  font-family:var(--mono);
+  font-size:28px;
+  font-weight:700;
+  display:block;
+  margin-bottom:6px;
+}
+
+.stat-val.g{color:var(--accent);}
+.stat-val.b{color:var(--accent2);}
+.stat-val.o{color:var(--accent3);}
+
+.stat-lbl{
+  font-size:11px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:2px;
+}
+
+/* Section headings */
+.section-label{
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--accent);
+  letter-spacing:3px;
+  text-transform:uppercase;
+  margin-bottom:16px;
+}
+
+h2{
+  font-size:36px;
+  font-weight:700;
+  letter-spacing:-1px;
+  margin-bottom:48px;
+  color:var(--text);
+}
+
+/* Pipeline */
+.pipeline-wrap{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:48px;
+  margin-bottom:48px;
+}
+
+.pipeline{
+  display:flex;
+  align-items:center;
+  gap:0;
+  overflow-x:auto;
+}
+
+.p-box{
+  flex:1;
+  min-width:140px;
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:20px 16px;
+  text-align:center;
+}
+
+.p-box.mine{
+  border-color:var(--accent);
+  background:#031a0d;
+}
+
+.p-box-num{
+  font-family:var(--mono);
+  font-size:10px;
+  color:var(--muted);
+  margin-bottom:8px;
+  letter-spacing:2px;
+}
+
+.p-box.mine .p-box-num{color:var(--accent);}
+
+.p-box-name{
+  font-size:13px;
+  font-weight:600;
+  color:var(--text);
+  margin-bottom:4px;
+}
+
+.p-box-desc{
+  font-size:11px;
+  color:var(--muted);
+  line-height:1.4;
+}
+
+.p-arrow{
+  flex-shrink:0;
+  width:40px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+  overflow:visible;
+}
+
+@keyframes dot{
+  0%{left:0;opacity:0;}
+  10%{opacity:1;}
+  90%{opacity:1;}
+  100%{left:40px;opacity:0;}
+}
+
+.p-arrow::after{
+  content:'';
+  position:absolute;
+  width:7px;height:7px;
+  border-radius:50%;
+  background:var(--accent);
+  top:50%;
+  transform:translateY(-50%);
+  animation:dot 1.5s linear infinite;
+}
+
+.p-arrow.b::after{background:var(--accent2);}
+.p-arrow.o::after{background:var(--accent3);}
+
+/* Modules */
+.modules{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:20px;
+  margin-bottom:48px;
+}
+
+@media(max-width:768px){
+  .modules{grid-template-columns:1fr;}
+}
+
+.module{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:28px;
+  position:relative;
+  overflow:hidden;
+}
+
+.module::after{
+  content:'';
+  position:absolute;
+  top:0;left:0;right:0;
+  height:2px;
+}
+
+.module.m1::after{background:var(--accent2);}
+.module.m2::after{background:var(--accent);}
+.module.m3::after{background:var(--accent3);}
+
+.mod-num{
+  font-family:var(--mono);
+  font-size:10px;
+  color:var(--muted);
+  letter-spacing:2px;
+  margin-bottom:12px;
+}
+
+.mod-title{
+  font-size:15px;
+  font-weight:600;
+  margin-bottom:10px;
+}
+
+.module.m1 .mod-title{color:var(--accent2);}
+.module.m2 .mod-title{color:var(--accent);}
+.module.m3 .mod-title{color:var(--accent3);}
+
+.mod-desc{
+  font-size:13px;
+  color:var(--muted);
+  line-height:1.6;
+  margin-bottom:14px;
+}
+
+.mod-file{
+  font-family:var(--mono);
+  font-size:11px;
+  padding:4px 10px;
+  border-radius:4px;
+  border:1px solid;
+  display:inline-block;
+}
+
+.module.m1 .mod-file{border-color:var(--accent2);color:var(--accent2);}
+.module.m2 .mod-file{border-color:var(--accent);color:var(--accent);}
+.module.m3 .mod-file{border-color:var(--accent3);color:var(--accent3);}
+
+/* Terminal */
+.terminal{
+  background:#060609;
+  border:1px solid var(--border);
+  border-radius:10px;
+  overflow:hidden;
+  margin-bottom:24px;
+}
+
+.term-bar{
+  background:#111118;
+  padding:12px 16px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  border-bottom:1px solid var(--border);
+}
+
+.dot{width:10px;height:10px;border-radius:50%;}
+.dot.r{background:#ff5f57;}
+.dot.y{background:#ffbd2e;}
+.dot.g{background:#28c840;}
+.term-title{font-family:var(--mono);font-size:11px;color:var(--muted);margin-left:8px;}
+
+.term-body{
+  padding:24px;
+  font-family:var(--mono);
+  font-size:13px;
+  line-height:2;
+}
+
+.tp{color:var(--accent);}
+.tc{color:var(--text);}
+.to{color:var(--muted);}
+.tpass{color:var(--accent);font-weight:700;}
+.tnum{color:var(--accent2);}
+
+/* Synthesis grid */
+.synth-grid{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:16px;
+}
+
+@media(max-width:600px){
+  .synth-grid{grid-template-columns:1fr;}
+}
+
+.synth-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:28px;
+}
+
+.synth-label{
+  font-family:var(--mono);
+  font-size:10px;
+  color:var(--muted);
+  letter-spacing:2px;
+  text-transform:uppercase;
+  margin-bottom:10px;
+}
+
+.synth-val{
+  font-family:var(--mono);
+  font-size:38px;
+  font-weight:700;
+  line-height:1;
+  margin-bottom:8px;
+}
+
+.synth-val.g{color:var(--accent);}
+.synth-val.b{color:var(--accent2);}
+
+.synth-sub{
+  font-size:12px;
+  color:var(--muted);
+  line-height:1.5;
+}
+
+/* Context */
+.context-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:40px;
+  align-items:start;
+}
+
+@media(max-width:768px){
+  .context-grid{grid-template-columns:1fr;}
+}
+
+.context-text{
+  font-size:15px;
+  color:var(--muted);
+  line-height:1.8;
+}
+
+.context-text p{margin-bottom:16px;}
+.context-text strong{color:var(--text);}
+
+.pipeline-list{
+  list-style:none;
+}
+
+.pipeline-list li{
+  display:flex;
+  gap:16px;
+  padding:14px 0;
+  border-bottom:1px solid var(--border);
+  font-size:14px;
+  color:var(--muted);
+  align-items:flex-start;
+}
+
+.pipeline-list li:last-child{border-bottom:none;}
+
+.pl-num{
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--muted);
+  min-width:24px;
+  padding-top:2px;
+}
+
+.pl-name{color:var(--text);font-weight:500;}
+.pl-mine{color:var(--accent);}
+
+/* Footer */
+footer{
+  border-top:1px solid var(--border);
+  padding:32px 40px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  font-family:var(--mono);
+  font-size:12px;
+  color:var(--muted);
+}
+
+footer a{color:var(--muted);text-decoration:none;}
+footer a:hover{color:var(--accent);}
+
+/* Divider */
+.divider{
+  border:none;
+  border-top:1px solid var(--border);
+  margin:0;
+}
+
+</style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <a href="#" class="nav-logo">tlee / itch-parser</a>
+  <ul class="nav-links">
+    <li><a href="#architecture">Architecture</a></li>
+    <li><a href="#results">Results</a></li>
+    <li><a href="#context">Context</a></li>
+    <li><a href="https://github.com/tmlee06" target="_blank">GitHub ↗</a></li>
+  </ul>
+</nav>
+
+<!-- Hero -->
+<section class="hero" id="top">
+  <div class="hero-eyebrow">FPGA HFT · UC San Diego · 2026</div>
+  <h1>
+    ITCH <span class="green">5.0</span><br/>
+    <span class="muted">Parser &</span><br/>
+    Limit Order Book
+  </h1>
+  <p class="hero-sub">
+    A <strong>hardware NASDAQ market data decoder</strong> in pure Verilog, targeting the Xilinx Alveo U55C.
+    Processes raw exchange bytes in silicon — no CPU, no OS — and outputs live best bid/ask prices
+    in <strong>under 840 nanoseconds</strong>.
+  </p>
+  <div class="hero-cta">
+    <a href="https://github.com/tlee/itch-parser" target="_blank" class="btn btn-primary">View on GitHub</a>
+    <a href="#architecture" class="btn btn-ghost">See the architecture ↓</a>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat">
+      <span class="stat-val g">&lt;840</span>
+      <span class="stat-lbl">nanosecond latency</span>
+    </div>
+    <div class="stat">
+      <span class="stat-val b">100 MHz</span>
+      <span class="stat-lbl">clock speed</span>
+    </div>
+    <div class="stat">
+      <span class="stat-val o">8.71 ns</span>
+      <span class="stat-lbl">timing slack · U55C</span>
+    </div>
+    <div class="stat">
+      <span class="stat-val g">&lt;0.01%</span>
+      <span class="stat-lbl">chip utilization</span>
+    </div>
+  </div>
+</section>
+
+<hr class="divider"/>
+
+<!-- Architecture -->
+<section id="architecture">
+  <div class="section-label">01 — Architecture</div>
+  <h2>How it works</h2>
+
+  <div class="pipeline-wrap">
+    <div class="pipeline">
+      <div class="p-box">
+        <div class="p-box-num">INPUT</div>
+        <div class="p-box-name">NASDAQ</div>
+        <div class="p-box-desc">100G raw feed</div>
+      </div>
+      <div class="p-arrow"></div>
+      <div class="p-box mine">
+        <div class="p-box-num">MODULE 01</div>
+        <div class="p-box-name">AXI Adapter</div>
+        <div class="p-box-desc">512-bit → 8-bit<br/>tkeep handled</div>
+      </div>
+      <div class="p-arrow b"></div>
+      <div class="p-box mine">
+        <div class="p-box-num">MODULE 02</div>
+        <div class="p-box-name">ITCH Decoder</div>
+        <div class="p-box-desc">Add / Execute<br/>Cancel / Delete</div>
+      </div>
+      <div class="p-arrow o"></div>
+      <div class="p-box mine">
+        <div class="p-box-num">MODULE 03</div>
+        <div class="p-box-name">Order Book</div>
+        <div class="p-box-desc">Best bid/ask<br/>hardware regs</div>
+      </div>
+      <div class="p-arrow"></div>
+      <div class="p-box">
+        <div class="p-box-num">OUTPUT</div>
+        <div class="p-box-name">Signal</div>
+        <div class="p-box-desc">best_bid [31:0]<br/>best_ask [31:0]</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modules">
+    <div class="module m1">
+      <div class="mod-num">MODULE 01</div>
+      <div class="mod-title">AXI-Stream Adapter</div>
+      <div class="mod-desc">The 100G CMAC delivers data in 512-bit chunks. This module deserializes it to a byte-serial stream and handles the <code>tkeep</code> signal to skip padding bytes on partial Ethernet frames.</div>
+      <span class="mod-file">axis_512_to_8_adapter.v</span>
+    </div>
+    <div class="module m2">
+      <div class="mod-num">MODULE 02</div>
+      <div class="mod-title">ITCH 5.0 Decoder</div>
+      <div class="mod-desc">A finite state machine reading one byte per clock cycle at 100 MHz. Identifies message type from the first byte, then extracts price, shares, and side from each of the four ITCH 5.0 message types.</div>
+      <span class="mod-file">itch_decoder.v</span>
+    </div>
+    <div class="module m3">
+      <div class="mod-num">MODULE 03</div>
+      <div class="mod-title">Limit Order Book</div>
+      <div class="mod-desc">Updates best bid and ask price in hardware registers after every decoded message. Zero memory lookup latency — outputs are always live and current.</div>
+      <span class="mod-file">order_book.v</span>
+    </div>
+  </div>
+</section>
+
+<hr class="divider"/>
+
+<!-- Results -->
+<section id="results">
+  <div class="section-label">02 — Results</div>
+  <h2>Simulation & synthesis</h2>
+
+  <div class="terminal">
+    <div class="term-bar">
+      <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
+      <span class="term-title">Vivado xsim — full ITCH pipeline</span>
+    </div>
+    <div class="term-body">
+      <div><span class="tp">$ </span><span class="tc">xsim itch_snap --runall</span></div>
+      <div class="to">Time resolution is 1 ps · run -all</div>
+      <div><span class="to">End of valid hex data reached at index </span><span class="tnum">720</span></div>
+      <div><span class="to">$finish called at time : </span><span class="tnum">7520 ns</span></div>
+      <div class="to">exit</div>
+      <div>&nbsp;</div>
+      <div><span class="tpass">✓ PASS</span><span class="to"> — 720 bytes · AAPL / SPY / MSFT · Add, Execute, Cancel, Delete · 0 errors</span></div>
+    </div>
+  </div>
+
+  <div class="synth-grid">
+    <div class="synth-card">
+      <div class="synth-label">Timing slack (WNS)</div>
+      <div class="synth-val g">+8.71<span style="font-size:18px;">ns</span></div>
+      <div class="synth-sub">Target: 10 ns (100 MHz). 87% margin — design could run at ~700 MHz. Synthesized on Alveo U55C xcu55c-fsvh2892-2L-e.</div>
+    </div>
+    <div class="synth-card">
+      <div class="synth-label">CLB LUTs used</div>
+      <div class="synth-val b">11<span style="font-size:18px;color:var(--muted);">/1.3M</span></div>
+      <div class="synth-sub">Less than 0.01% of available logic resources. 0 BRAM, 0 DSPs. Pure combinational logic — extremely lean.</div>
+    </div>
+    <div class="synth-card">
+      <div class="synth-label">Flip-flops</div>
+      <div class="synth-val g">10<span style="font-size:18px;color:var(--muted);">/2.6M</span></div>
+      <div class="synth-sub">Minimal state registers. The FSM compresses down to just the essential state bits after Vivado optimization.</div>
+    </div>
+    <div class="synth-card">
+      <div class="synth-label">Synthesis status</div>
+      <div class="synth-val b" style="font-size:24px;padding-top:6px;">0 errors<br/>0 critical warnings</div>
+      <div class="synth-sub">Vivado 2023.2 · xcu55c-fsvh2892-2L-e · Speed grade -2L</div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider"/>
+
+<!-- Context -->
+<section id="context">
+  <div class="section-label">03 — Context</div>
+  <h2>Where this fits</h2>
+
+  <div class="context-grid">
+    <div class="context-text">
+      <p>
+        This module was built as part of a <strong>6-person end-to-end HFT pipeline</strong> at UC San Diego's
+        Triton Quantitative Trading club. The full system targets two Xilinx Alveo U55C cards
+        on the Nautilus NRP Kubernetes cluster, connected via QSFP+ loopback.
+      </p>
+      <p>
+        My responsibility was the <strong>core decode engine</strong> — the step between raw network bytes
+        and actionable trading signals. Beyond the Verilog modules, I also configured the
+        ESnet SmartNIC build framework, debugged a Vivado containerization crash in Kubernetes,
+        and built the full Vitis RTL kernel packaging pipeline.
+      </p>
+      <p>
+        The design was validated in Vivado simulation against real Databento NASDAQ ITCH 5.0
+        market data and synthesized successfully on the Alveo U55C target hardware.
+      </p>
+    </div>
+
+    <div>
+      <ul class="pipeline-list">
+        <li>
+          <span class="pl-num">01</span>
+          <span>Databento feed ingestion + PCIe bitstreamer</span>
+        </li>
+        <li>
+          <span class="pl-num">02</span>
+          <span>100G Ethernet + AXI-Stream transport</span>
+        </li>
+        <li>
+          <span class="pl-num">03</span>
+          <span>MAC / IPv4 / UDP header stripping</span>
+        </li>
+        <li>
+          <span class="pl-num">04</span>
+          <span>MoldUDP64 envelope parser</span>
+        </li>
+        <li>
+          <span class="pl-num">05</span>
+          <span class="pl-mine">ITCH 5.0 decoder + Limit Order Book ← this repo</span>
+        </li>
+        <li>
+          <span class="pl-num">06</span>
+          <span>Feature engine (momentum, vol-imbalance, etc.)</span>
+        </li>
+        <li>
+          <span class="pl-num">07</span>
+          <span>MLP 6-8-1 strategy engine</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<hr class="divider"/>
+
+<footer>
+  <span>Tristan Lee · UC San Diego · 2026</span>
+  <div style="display:flex;gap:24px;">
+    <a href="https://github.com/tlee/itch-parser" target="_blank">GitHub ↗</a>
+    <a href="https://linkedin.com/in/tlee06" target="_blank">LinkedIn ↗</a>
+  </div>
+</footer>
+
+</body>
+</html>
